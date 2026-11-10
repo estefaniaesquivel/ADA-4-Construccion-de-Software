@@ -1,6 +1,7 @@
 package gestor.prestamos.persistencia;
 
 import gestor.prestamos.modelo.Herramienta;
+import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
 
 import java.io.IOException;
@@ -153,11 +154,14 @@ public final class RepositorioCsv {
             }
             LocalDate inicio = LocalDate.parse(campos.get(3).trim());
             LocalDate limite = LocalDate.parse(campos.get(4).trim());
+            // Tecnica: Introduce Parameter Object.
+            // Se construye PeriodoPrestamo con las fechas de inicio y limite leidas del CSV.
+            PeriodoPrestamo periodo = new PeriodoPrestamo(inicio, limite);
             String textoDevolucion = campos.get(5).trim();
             LocalDate devolucion = textoDevolucion.isEmpty() ? null : LocalDate.parse(textoDevolucion);
             int diasRetraso = Integer.parseInt(campos.get(6).trim());
             double penalizacion = Double.parseDouble(campos.get(7).trim());
-            return new Prestamo(id, herramienta, campos.get(2), inicio, limite, devolucion, diasRetraso, penalizacion);
+            return new Prestamo(id, herramienta, campos.get(2), periodo, devolucion, diasRetraso, penalizacion);
         } catch (IllegalArgumentException | DateTimeException e) {
             throw error(ARCHIVO_PRESTAMOS, numeroLinea, e.getMessage());
         }
