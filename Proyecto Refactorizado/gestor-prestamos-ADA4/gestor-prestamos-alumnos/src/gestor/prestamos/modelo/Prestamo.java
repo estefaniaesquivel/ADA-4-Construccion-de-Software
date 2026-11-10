@@ -9,6 +9,9 @@ import java.time.temporal.ChronoUnit;
  */
 public final class Prestamo {
 
+    /** Penalización en euros por cada día de retraso. */
+    public static final double PENALIZACION_POR_DIA = 2.0;
+
     private final int id;
     private final Herramienta herramienta;
     private final String prestatario;
@@ -90,6 +93,17 @@ public final class Prestamo {
     }
 
     /**
+     * Calcula los días transcurridos entre la fecha límite del préstamo y la fecha indicada, centraliza la fórmula
+     * del retraso para usarla tanto al consultar un préstamo abierto como al registrar su devolución.
+     *
+     * @param fecha fecha hasta la que se cuenta el retraso
+     * @return días de retraso, 0 si la fecha no supera la fecha límite
+     */
+    private long diasDeRetrasoHasta(LocalDate fecha) { //Método añadido separando el cálculo de los días
+        return Math.max(0, ChronoUnit.DAYS.between(fechaLimite, fecha));
+    }
+
+    /**
      * Devuelve los días de retraso a fecha de referencia. Si el préstamo ya se devolvió,
      * devuelve el retraso registrado; si sigue abierto, lo calcula hasta la fecha indicada.
      *
@@ -100,7 +114,7 @@ public final class Prestamo {
         if (!estaActivo()) {
             return diasRetraso;
         }
-        return Math.max(0, ChronoUnit.DAYS.between(fechaLimite, hoy));
+        return diasDeRetrasoHasta(hoy);
     }
 
     /**
@@ -118,11 +132,10 @@ public final class Prestamo {
      * Registra la devolución de la herramienta, calculando el retraso y la penalización.
      *
      * @param fecha fecha real de devolución; no puede ser anterior al préstamo
-     * @param penalizacionPorDia importe en euros por cada día de retraso
      * @throws IllegalStateException si el préstamo ya estaba devuelto
      * @throws IllegalArgumentException si la fecha es nula o anterior al préstamo
      */
-    public void registrarDevolucion(LocalDate fecha, double penalizacionPorDia) {
+    public void registrarDevolucion(LocalDate fecha) { //Se eliminó un parámetro innecesario (Remove Parameter)
         if (!estaActivo()) {
             throw new IllegalStateException("El préstamo ya fue devuelto");
         }
@@ -132,7 +145,13 @@ public final class Prestamo {
         if (fecha.isBefore(fechaPrestamo)) {
             throw new IllegalArgumentException("La devolución no puede ser anterior al préstamo");
         }
+        /*
+         * La lógica queda dentro de Préstamo ya que usa atributos de esta clase y no de GestorPréstamos (Move Method)
+         */
+        long retraso = diasDeRetrasoHasta(fecha);
         this.fechaDevolucion = fecha;
+        this.diasRetraso = (int) retraso;
+        this.penalizacion = Math.round(retraso * PENALIZACION_POR_DIA * 100.0) / 100.0;
     }
 
     /**

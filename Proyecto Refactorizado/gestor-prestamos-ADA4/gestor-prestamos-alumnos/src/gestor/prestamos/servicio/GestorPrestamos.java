@@ -19,9 +19,6 @@ public final class GestorPrestamos {
     /** Días de préstamo que se proponen por defecto. */
     public static final int DIAS_PRESTAMO_DEFECTO = 7;
 
-    /** Penalización en euros por cada día de retraso. */
-    public static final double PENALIZACION_POR_DIA = 2.0;
-
     private final List<Herramienta> herramientas;
     private final List<Prestamo> prestamos;
 
@@ -177,10 +174,7 @@ public final class GestorPrestamos {
                 .filter(p -> p.getId() == prestamoId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No existe el préstamo con ID " + prestamoId));
-        prestamo.registrarDevolucion(fecha, PENALIZACION_POR_DIA);
-        long retraso = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(prestamo.getFechaLimite(), fecha));
-        prestamo.setDiasRetraso((int) retraso);
-        prestamo.setPenalizacion(Math.round(retraso * PENALIZACION_POR_DIA * 100.0) / 100.0);
+        prestamo.registrarDevolucion(fecha);
         return prestamo;
     }
 
