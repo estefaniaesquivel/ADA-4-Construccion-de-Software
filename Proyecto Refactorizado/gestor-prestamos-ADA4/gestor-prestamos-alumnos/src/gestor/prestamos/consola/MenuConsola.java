@@ -169,14 +169,49 @@ public final class MenuConsola {
             System.out.println("\n  No hay herramientas disponibles para prestar.");
             return;
         }
+
+        //TECNICA: EXTRACT METHOD 
+        // (SE APLICO A LOS SIGUIENTES 3 BLOQUES DE CODIGO: PETICION DE FECHAS, SELECCION DE HERRAMIENTA Y REGISTRO DEL PRESTAMO)
+        //  CADA BLOQUE SE EXTRAE A UN METODO PRIVADO NUEVO.
+        //NOTA: Solo cambia la clase MenuConsola ya que los métodos nuevos son privados, así que no afecta a Main
+
+        //DESPUES DE EXTRAER LOS METODOS AHORA SI, SE LLAMAN DENTRO DE LA FUNCIÓN PRESTAR()
+        //ERESPETANDO EL PRINCIPIO DE RESPONSABILIDAD UNICA
+        
+        //Se extrajó la seleccion de la herramienta a un metodo privado llamado seleccionarHerramienta()
+        int id = seleccionarHerramienta(disponibles);
+        String prestatario = entrada.pedirTexto("Nombre de quien la recibe: ");
+        //La peticion de las fechas se extrajo a pedirPeriodo(), que devuelve el PeriodoPrestamo ya armado
+        PeriodoPrestamo periodo = pedirPeriodo();
+        //El registro del prestamo (prestar, guardar y confirmar) se extrajo a registrarPrestamo()
+        registrarPrestamo(id, prestatario, periodo);
+    }
+
+    // TECNICA EXTRACT METHOD (SELECCION DE HERRAMIENTA)
+    /**
+     * Muestra las herramientas disponibles y pide al usuario que elija una.
+     *
+     * @param disponibles herramientas que pueden prestarse; no puede estar vacía
+     * @return el identificador de la herramienta elegida
+     */
+    private int seleccionarHerramienta(List<Herramienta> disponibles) {
         System.out.println("\n  Herramientas disponibles:");
         for (Herramienta herramienta : disponibles) {
             System.out.printf("    %d. %s%n", herramienta.getId(), herramienta.getNombre());
         }
         List<Integer> ids = disponibles.stream().map(Herramienta::getId).toList();
-        int id = entrada.pedirOpcion("ID de la herramienta: ", ids);
-        String prestatario = entrada.pedirTexto("Nombre de quien la recibe: ");
+        return entrada.pedirOpcion("ID de la herramienta: ", ids);
+    }
 
+    // TECNICA EXTRACT METHOD (PETICION DE FECHAS)
+    /**
+     * Pide la fecha de préstamo y la fecha límite. Si el usuario pulsa Enter, el préstamo
+     * empieza hoy y el límite es el inicio más los días de préstamo por defecto.
+     *
+     * @return el periodo con las fechas de inicio y límite
+     * @throws IllegalArgumentException si la fecha límite es anterior a la de inicio
+     */
+    private PeriodoPrestamo pedirPeriodo() {
         LocalDate hoy = LocalDate.now();
         LocalDate inicio = entrada.pedirFecha("Fecha de préstamo (AAAA-MM-DD, Enter = " + hoy + "): ", hoy);
         LocalDate limitePorDefecto = inicio.plusDays(GestorPrestamos.DIAS_PRESTAMO_DEFECTO);
@@ -185,12 +220,24 @@ public final class MenuConsola {
 
         // Tecnica: Introduce Parameter Object.
         // Se empaquetan las fechas de inicio y limite en PeriodoPrestamo antes de solicitar el prestamo.
-        PeriodoPrestamo periodo = new PeriodoPrestamo(inicio, limite);
-        Prestamo nuevo = gestor.prestar(id, prestatario, periodo);
+        return new PeriodoPrestamo(inicio, limite);
+    }
+
+    // TECNICA EXTRACT METHOD (REGISTRO DEL PRESTAMO)
+    /**
+     * Registra el préstamo en el servicio, guarda los datos y confirma al usuario.
+     *
+     * @param herramientaId identificador de la herramienta a prestar
+     * @param prestatario persona que recibe la herramienta
+     * @param periodo fechas de préstamo y límite
+     */
+    private void registrarPrestamo(int herramientaId, String prestatario, PeriodoPrestamo periodo) {
+        Prestamo nuevo = gestor.prestar(herramientaId, prestatario, periodo);
         guardar();
         System.out.printf("  '%s' prestada a %s hasta %s.%n",
                 nuevo.getHerramienta().getNombre(), nuevo.getPrestatario(), nuevo.getFechaLimite());
     }
+
 
     private void devolver() {
         List<Prestamo> activos = gestor.prestamosActivos();
