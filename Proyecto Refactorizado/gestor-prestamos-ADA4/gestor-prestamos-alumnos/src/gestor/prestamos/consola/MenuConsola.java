@@ -204,13 +204,6 @@ public final class MenuConsola {
     }
 
     // TECNICA EXTRACT METHOD (PETICION DE FECHAS)
-    /**
-     * Pide la fecha de préstamo y la fecha límite. Si el usuario pulsa Enter, el préstamo
-     * empieza hoy y el límite es el inicio más los días de préstamo por defecto.
-     *
-     * @return el periodo con las fechas de inicio y límite
-     * @throws IllegalArgumentException si la fecha límite es anterior a la de inicio
-     */
     private PeriodoPrestamo pedirPeriodo() {
         LocalDate hoy = LocalDate.now();
         LocalDate inicio = entrada.pedirFecha("Fecha de préstamo (AAAA-MM-DD, Enter = " + hoy + "): ", hoy);
@@ -224,13 +217,6 @@ public final class MenuConsola {
     }
 
     // TECNICA EXTRACT METHOD (REGISTRO DEL PRESTAMO)
-    /**
-     * Registra el préstamo en el servicio, guarda los datos y confirma al usuario.
-     *
-     * @param herramientaId identificador de la herramienta a prestar
-     * @param prestatario persona que recibe la herramienta
-     * @param periodo fechas de préstamo y límite
-     */
     private void registrarPrestamo(int herramientaId, String prestatario, PeriodoPrestamo periodo) {
         Prestamo nuevo = gestor.prestar(herramientaId, prestatario, periodo);
         guardar();
@@ -281,28 +267,46 @@ public final class MenuConsola {
         //sustituyo por la consulta fechaActual(). Cada lugar donde se usaba "hoy" ahora llama a esa consulta
         //fechaActual() se puso debajo de esta funcion para que sea mas facil de encontrar
         //la refac replace temp with query no involucró cambios en otras clases, ya que la variable 
-        //temporal "hoy" solo se usaba en esta funcion y no se pasaba a otras clases.
+        //temporal "hoy" solo se usaba en esta funcion y no se pasaba a otras clases
         System.out.println("\n  Préstamos activos:");
         for (Prestamo p : activos) {
+            //TECNICA: DECOMPOSE CONDITIONAL
+            //El if/else mezclaba el calculo del retraso con la construccion del texto. Se extrajeron las condiciones a
+            //métodos privados nuevos: la condicion (estaAtrasado), y si cumple ejecuta (describirAtraso) y si no 
+            // ejecuta (describirAlDia), de modo que solo se lee que se decide y que se muestra en cada caso.
+            //NOTA: se colocaron debajo de fechaActual() para que sea más facil buscarlos
+            //Esto fue posible gracias a fechaActual() (que se hizo con Replace Temp with Query), ya que
+            //los metodos nuevos obtienen la fecha por si mismos y no hace falta pasarles "hoy" como parametro
             String situacion;
-            if (p.estado(fechaActual()) == EstadoPrestamo.ATRASADO) {
-                long dias = p.getDiasRetrasoA(fechaActual());
-                double estimada = p.calcularPenalizacion(fechaActual(), Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
-                situacion = String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
+            if (estaAtrasado(p)) {
+                situacion = describirAtraso(p);
             } else {
-                situacion = "Al día, vence " + p.getFechaLimite();
+                situacion = describirAlDia(p);
             }
             System.out.printf("    %s - %s | desde %s | %s%n",
                     p.getHerramienta().getNombre(), p.getPrestatario(), p.getFechaPrestamo(), situacion);
         }
     }
-    // TECNICA REPLACE TEMP WITH QUERY (MÉTODO DE CONSULTA)
-    /**
-     * Obtiene la fecha de referencia para calcular el estado de los préstamos.
-     * @return la fecha de hoy
-     */
+    //TECNICA REPLACE TEMP WITH QUERY (MÉTODO DE CONSULTA PARA FECHA ACTUAL)
     private LocalDate fechaActual() {
         return LocalDate.now();
+    }
+
+    //TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION SI ESTÁ ATRASADO)
+    private boolean estaAtrasado(Prestamo prestamo) {
+        return prestamo.estado(fechaActual()) == EstadoPrestamo.ATRASADO;
+    }
+
+    //TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION QUE DESCRIBE EL ATRASO)
+    private String describirAtraso(Prestamo prestamo) {
+        long dias = prestamo.getDiasRetrasoA(fechaActual());
+        double estimada = prestamo.calcularPenalizacion(fechaActual(), Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
+        return String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
+    }
+
+    // TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION QUE DESCRIBE QUE EL PRESTAMO ESTÁ AL DÍA)
+    private String describirAlDia(Prestamo prestamo) {
+        return "Al día, vence " + prestamo.getFechaLimite();
     }
 
     private void verHistorial() {
