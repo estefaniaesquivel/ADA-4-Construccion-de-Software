@@ -1,16 +1,16 @@
 package gestor.prestamos.consola;
 
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
 import gestor.prestamos.modelo.EstadoPrestamo;
 import gestor.prestamos.modelo.Herramienta;
 import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
 import gestor.prestamos.persistencia.RepositorioCsv;
 import gestor.prestamos.servicio.GestorPrestamos;
-
-import java.io.IOException;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Menú principal de la aplicación. Muestra las opciones, pide los datos necesarios
@@ -229,13 +229,18 @@ public final class MenuConsola {
             System.out.println("\n  No hay préstamos activos.");
             return;
         }
-        LocalDate hoy = LocalDate.now();
+        //TECNICA REPLACE TEMP WITH QUERY
+        //La variable temporal "hoy" (LocalDate hoy = LocalDate.now()) se asignaba una sola vez, asi que se
+        //sustituyo por la consulta fechaActual(). Cada lugar donde se usaba "hoy" ahora llama a esa consulta
+        //fechaActual() se puso debajo de esta funcion para que sea mas facil de encontrar
+        //la refac replace temp with query no involucró cambios en otras clases, ya que la variable 
+        //temporal "hoy" solo se usaba en esta funcion y no se pasaba a otras clases.
         System.out.println("\n  Préstamos activos:");
         for (Prestamo p : activos) {
             String situacion;
-            if (p.estado(hoy) == EstadoPrestamo.ATRASADO) {
-                long dias = p.getDiasRetrasoA(hoy);
-                double estimada = p.calcularPenalizacion(hoy, Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
+            if (p.estado(fechaActual()) == EstadoPrestamo.ATRASADO) {
+                long dias = p.getDiasRetrasoA(fechaActual());
+                double estimada = p.calcularPenalizacion(fechaActual(), Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
                 situacion = String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
             } else {
                 situacion = "Al día, vence " + p.getFechaLimite();
@@ -243,6 +248,14 @@ public final class MenuConsola {
             System.out.printf("    %s - %s | desde %s | %s%n",
                     p.getHerramienta().getNombre(), p.getPrestatario(), p.getFechaPrestamo(), situacion);
         }
+    }
+    // TECNICA REPLACE TEMP WITH QUERY (MÉTODO DE CONSULTA)
+    /**
+     * Obtiene la fecha de referencia para calcular el estado de los préstamos.
+     * @return la fecha de hoy
+     */
+    private LocalDate fechaActual() {
+        return LocalDate.now();
     }
 
     private void verHistorial() {
