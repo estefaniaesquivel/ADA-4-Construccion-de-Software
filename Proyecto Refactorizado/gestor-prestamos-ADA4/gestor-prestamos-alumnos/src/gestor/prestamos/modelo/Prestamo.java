@@ -9,11 +9,13 @@ import java.time.temporal.ChronoUnit;
  */
 public final class Prestamo {
 
+    /** Penalización en euros por cada día de retraso. */
+    public static final double PENALIZACION_POR_DIA = 2.0;
+
     private final int id;
     private final Herramienta herramienta;
     private final String prestatario;
-    private final LocalDate fechaPrestamo;
-    private final LocalDate fechaLimite;
+    private final PeriodoPrestamo periodo;
     private LocalDate fechaDevolucion;
     private int diasRetraso;
     private double penalizacion;
@@ -25,15 +27,16 @@ public final class Prestamo {
      * @param id identificador único, mayor que cero
      * @param herramienta herramienta prestada; no puede ser nula
      * @param prestatario persona que recibe la herramienta; no puede estar vacío
-     * @param fechaPrestamo fecha en que se presta la herramienta
-     * @param fechaLimite fecha máxima de devolución; no puede ser anterior al préstamo
+     * @param periodo fechas de inicio y límite del préstamo; no puede ser nulo
      * @param fechaDevolucion fecha real de devolución, o nula si sigue activo
      * @param diasRetraso días de retraso registrados en la devolución; no negativo
      * @param penalizacion penalización cobrada en euros; no negativa
      * @throws IllegalArgumentException si alguno de los datos no es válido
      */
-    public Prestamo(int id, Herramienta herramienta, String prestatario, LocalDate fechaPrestamo,
-                    LocalDate fechaLimite, LocalDate fechaDevolucion, int diasRetraso, double penalizacion) {
+    // Tecnica: Introduce Parameter Object.
+    // Se reemplazan los parametros sueltos fechaPrestamo y fechaLimite por el objeto PeriodoPrestamo.
+    public Prestamo(int id, Herramienta herramienta, String prestatario, PeriodoPrestamo periodo,
+                    LocalDate fechaDevolucion, int diasRetraso, double penalizacion) {
         if (id <= 0) {
             throw new IllegalArgumentException("El id del préstamo debe ser positivo");
         }
@@ -43,13 +46,10 @@ public final class Prestamo {
         if (prestatario == null || prestatario.isBlank()) {
             throw new IllegalArgumentException("El prestatario es obligatorio");
         }
-        if (fechaPrestamo == null || fechaLimite == null) {
+        if (periodo == null) {
             throw new IllegalArgumentException("Las fechas de préstamo y límite son obligatorias");
         }
-        if (fechaLimite.isBefore(fechaPrestamo)) {
-            throw new IllegalArgumentException("La fecha límite no puede ser anterior al préstamo");
-        }
-        if (fechaDevolucion != null && fechaDevolucion.isBefore(fechaPrestamo)) {
+        if (fechaDevolucion != null && fechaDevolucion.isBefore(periodo.getFechaInicio())) {
             throw new IllegalArgumentException("La devolución no puede ser anterior al préstamo");
         }
         if (diasRetraso < 0 || penalizacion < 0) {
@@ -58,8 +58,7 @@ public final class Prestamo {
         this.id = id;
         this.herramienta = herramienta;
         this.prestatario = prestatario.trim();
-        this.fechaPrestamo = fechaPrestamo;
-        this.fechaLimite = fechaLimite;
+        this.periodo = periodo;
         this.fechaDevolucion = fechaDevolucion;
         this.diasRetraso = diasRetraso;
         this.penalizacion = penalizacion;
@@ -86,7 +85,18 @@ public final class Prestamo {
         if (!estaActivo()) {
             return EstadoPrestamo.DEVUELTO;
         }
-        return hoy.isAfter(fechaLimite) ? EstadoPrestamo.ATRASADO : EstadoPrestamo.ACTIVO;
+        return hoy.isAfter(periodo.getFechaLimite()) ? EstadoPrestamo.ATRASADO : EstadoPrestamo.ACTIVO;
+    }
+
+    /**
+     * Calcula los días transcurridos entre la fecha límite del préstamo y la fecha indicada, centraliza la fórmula
+     * del retraso para usarla tanto al consultar un préstamo abierto como al registrar su devolución.
+     *
+     * @param fecha fecha hasta la que se cuenta el retraso
+     * @return días de retraso, 0 si la fecha no supera la fecha límite
+     */
+    private long diasDeRetrasoHasta(LocalDate fecha) { //Método añadido separando el cálculo de los días
+        return Math.max(0, ChronoUnit.DAYS.between(periodo.getFechaLimite(), fecha));
     }
 
     /**
@@ -100,7 +110,7 @@ public final class Prestamo {
         if (!estaActivo()) {
             return diasRetraso;
         }
-        return Math.max(0, ChronoUnit.DAYS.between(fechaLimite, hoy));
+        return diasDeRetrasoHasta(hoy);
     }
 
     /**
@@ -118,21 +128,26 @@ public final class Prestamo {
      * Registra la devolución de la herramienta, calculando el retraso y la penalización.
      *
      * @param fecha fecha real de devolución; no puede ser anterior al préstamo
-     * @param penalizacionPorDia importe en euros por cada día de retraso
      * @throws IllegalStateException si el préstamo ya estaba devuelto
      * @throws IllegalArgumentException si la fecha es nula o anterior al préstamo
      */
-    public void registrarDevolucion(LocalDate fecha, double penalizacionPorDia) {
+    public void registrarDevolucion(LocalDate fecha) { //Se eliminó un parámetro innecesario (Remove Parameter)
         if (!estaActivo()) {
             throw new IllegalStateException("El préstamo ya fue devuelto");
         }
         if (fecha == null) {
             throw new IllegalArgumentException("La fecha de devolución es obligatoria");
         }
-        if (fecha.isBefore(fechaPrestamo)) {
+        if (fecha.isBefore(periodo.getFechaInicio())) {
             throw new IllegalArgumentException("La devolución no puede ser anterior al préstamo");
         }
+        /*
+         * La lógica queda dentro de Préstamo ya que usa atributos de esta clase y no de GestorPréstamos (Move Method)
+         */
+        long retraso = diasDeRetrasoHasta(fecha);
         this.fechaDevolucion = fecha;
+        this.diasRetraso = (int) retraso;
+        this.penalizacion = Math.round(retraso * PENALIZACION_POR_DIA * 100.0) / 100.0;
     }
 
     /**
@@ -181,12 +196,21 @@ public final class Prestamo {
     }
 
     /**
+     * Devuelve el periodo de fechas del préstamo.
+     *
+     * @return periodo con fecha de inicio y fecha límite
+     */
+    public PeriodoPrestamo getPeriodo() {
+        return periodo;
+    }
+
+    /**
      * Devuelve la fecha en que se prestó la herramienta.
      *
      * @return fecha de préstamo
      */
     public LocalDate getFechaPrestamo() {
-        return fechaPrestamo;
+        return periodo.getFechaInicio();
     }
 
     /**
@@ -195,7 +219,7 @@ public final class Prestamo {
      * @return fecha límite
      */
     public LocalDate getFechaLimite() {
-        return fechaLimite;
+        return periodo.getFechaLimite();
     }
 
     /**

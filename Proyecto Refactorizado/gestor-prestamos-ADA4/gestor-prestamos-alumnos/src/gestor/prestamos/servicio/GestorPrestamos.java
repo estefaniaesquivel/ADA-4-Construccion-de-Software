@@ -1,6 +1,7 @@
 package gestor.prestamos.servicio;
 
 import gestor.prestamos.modelo.Herramienta;
+import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
 
 import java.time.LocalDate;
@@ -18,9 +19,6 @@ public final class GestorPrestamos {
 
     /** Días de préstamo que se proponen por defecto. */
     public static final int DIAS_PRESTAMO_DEFECTO = 7;
-
-    /** Penalización en euros por cada día de retraso. */
-    public static final double PENALIZACION_POR_DIA = 2.0;
 
     private final List<Herramienta> herramientas;
     private final List<Prestamo> prestamos;
@@ -142,13 +140,14 @@ public final class GestorPrestamos {
      *
      * @param herramientaId identificador de la herramienta a prestar
      * @param prestatario persona que recibe la herramienta
-     * @param fechaPrestamo fecha del préstamo
-     * @param fechaLimite fecha máxima de devolución
+     * @param periodo fechas de préstamo y límite; no puede ser nulo
      * @return el préstamo creado
      * @throws IllegalArgumentException si la herramienta no existe o los datos no son válidos
      * @throws IllegalStateException si la herramienta ya está prestada
      */
-    public Prestamo prestar(int herramientaId, String prestatario, LocalDate fechaPrestamo, LocalDate fechaLimite) {
+    // Tecnica: Introduce Parameter Object.
+    // Se agrupan fechaPrestamo y fechaLimite en el objeto PeriodoPrestamo recibido por parametro.
+    public Prestamo prestar(int herramientaId, String prestatario, PeriodoPrestamo periodo) {
         Herramienta herramienta = buscarHerramienta(herramientaId)
                 .orElseThrow(() -> new IllegalArgumentException("No existe ninguna herramienta con ID " + herramientaId));
         if (herramienta.isDadaDeBaja()) {
@@ -158,7 +157,7 @@ public final class GestorPrestamos {
             throw new IllegalStateException("La herramienta '" + herramienta.getNombre() + "' ya está prestada");
         }
         int siguienteId = prestamos.stream().mapToInt(Prestamo::getId).max().orElse(0) + 1;
-        Prestamo nuevo = new Prestamo(siguienteId, herramienta, prestatario, fechaPrestamo, fechaLimite, null, 0, 0.0);
+        Prestamo nuevo = new Prestamo(siguienteId, herramienta, prestatario, periodo, null, 0, 0.0);
         prestamos.add(nuevo);
         return nuevo;
     }
@@ -168,20 +167,29 @@ public final class GestorPrestamos {
      *
      * @param prestamoId identificador del préstamo
      * @param fecha fecha real de devolución
-     * @return el préstamo actualizado
      * @throws IllegalArgumentException si el préstamo no existe o la fecha no es válida
      * @throws IllegalStateException si el préstamo ya estaba devuelto
      */
-    public Prestamo devolver(int prestamoId, LocalDate fecha) {
-        Prestamo prestamo = prestamos.stream()
+    // Tecnica: Separate Query from Modifier.
+    // Se separa el modificador devolver (ahora void, sin valor de retorno) de la consulta
+    // buscarPrestamo(int), de modo que el metodo que altera el estado no retorne un objeto.
+    public void devolver(int prestamoId, LocalDate fecha) {
+        Prestamo prestamo = buscarPrestamo(prestamoId);
+        prestamo.registrarDevolucion(fecha);
+    }
+
+    /**
+     * Busca y devuelve un préstamo por su identificador sin modificar su estado.
+     *
+     * @param prestamoId identificador del préstamo
+     * @return el préstamo correspondiente
+     * @throws IllegalArgumentException si no existe un préstamo con ese identificador
+     */
+    public Prestamo buscarPrestamo(int prestamoId) {
+        return prestamos.stream()
                 .filter(p -> p.getId() == prestamoId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No existe el préstamo con ID " + prestamoId));
-        prestamo.registrarDevolucion(fecha, PENALIZACION_POR_DIA);
-        long retraso = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(prestamo.getFechaLimite(), fecha));
-        prestamo.setDiasRetraso((int) retraso);
-        prestamo.setPenalizacion(Math.round(retraso * PENALIZACION_POR_DIA * 100.0) / 100.0);
-        return prestamo;
     }
 
     /**

@@ -2,6 +2,7 @@ package gestor.prestamos.consola;
 
 import gestor.prestamos.modelo.EstadoPrestamo;
 import gestor.prestamos.modelo.Herramienta;
+import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
 import gestor.prestamos.persistencia.RepositorioCsv;
 import gestor.prestamos.servicio.GestorPrestamos;
@@ -182,7 +183,10 @@ public final class MenuConsola {
         LocalDate limite = entrada.pedirFecha(
                 "Fecha límite (AAAA-MM-DD, Enter = " + limitePorDefecto + "): ", limitePorDefecto);
 
-        Prestamo nuevo = gestor.prestar(id, prestatario, inicio, limite);
+        // Tecnica: Introduce Parameter Object.
+        // Se empaquetan las fechas de inicio y limite en PeriodoPrestamo antes de solicitar el prestamo.
+        PeriodoPrestamo periodo = new PeriodoPrestamo(inicio, limite);
+        Prestamo nuevo = gestor.prestar(id, prestatario, periodo);
         guardar();
         System.out.printf("  '%s' prestada a %s hasta %s.%n",
                 nuevo.getHerramienta().getNombre(), nuevo.getPrestatario(), nuevo.getFechaLimite());
@@ -205,7 +209,10 @@ public final class MenuConsola {
         LocalDate hoy = LocalDate.now();
         LocalDate fecha = entrada.pedirFecha("Fecha de devolución (AAAA-MM-DD, Enter = " + hoy + "): ", hoy);
 
-        Prestamo devuelto = gestor.devolver(id, fecha);
+        // Tecnica: Separate Query from Modifier.
+        // Primero se invoca al modificador para registrar la devolucion y despues a la consulta para obtener el prestamo.
+        gestor.devolver(id, fecha);
+        Prestamo devuelto = gestor.buscarPrestamo(id);
         guardar();
         System.out.println("  Devolución registrada.");
         if (devuelto.getDiasRetraso() > 0) {
@@ -228,7 +235,7 @@ public final class MenuConsola {
             String situacion;
             if (p.estado(hoy) == EstadoPrestamo.ATRASADO) {
                 long dias = p.getDiasRetrasoA(hoy);
-                double estimada = p.calcularPenalizacion(hoy, GestorPrestamos.PENALIZACION_POR_DIA);
+                double estimada = p.calcularPenalizacion(hoy, Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
                 situacion = String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
             } else {
                 situacion = "Al día, vence " + p.getFechaLimite();
