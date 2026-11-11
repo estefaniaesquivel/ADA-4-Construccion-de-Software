@@ -1,7 +1,6 @@
 package gestor.prestamos.consola;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Scanner;
@@ -75,12 +74,29 @@ public final class Entrada {
             if (texto.isEmpty() && valorPorDefecto != null) {
                 return valorPorDefecto;
             }
-            try {
-                return LocalDate.parse(texto);
-            } catch (DateTimeParseException e) {
-                System.out.println("  Formato inválido. Usa AAAA-MM-DD.");
+            // Se aplica Replace Exception with Test verificando primero si el formato es válido en lugar de usar try-catch
+            if (!esFechaValida(texto)) { // Prueba condicional previa para evitar lanzar DateTimeParseException
+                System.out.println("  Formato inválido. Usa AAAA-MM-DD."); // Se informa del error sin recurrir a excepciones
+            } else { // Si pasa la prueba condicional, es seguro convertir el texto a fecha
+                return LocalDate.parse(texto); // Se parsea la fecha sabiendo que cumple el formato y rango
             }
         }
+    }
+
+    // Método auxiliar de prueba para validar formato AAAA-MM-DD y rangos de calendario antes de parsear
+    private boolean esFechaValida(String texto) {
+        if (!texto.matches("\\d{4}-\\d{2}-\\d{2}")) { // Verifica con una expresión regular que tenga estructura AAAA-MM-DD
+            return false; // No cumple con el patrón básico de dígitos y guiones
+        }
+        String[] partes = texto.split("-"); // Separa el año, mes y día para validar sus rangos
+        int anio = Integer.parseInt(partes[0]); // Obtiene el valor numérico del año
+        int mes = Integer.parseInt(partes[1]); // Obtiene el valor numérico del mes
+        int dia = Integer.parseInt(partes[2]); // Obtiene el valor numérico del día
+        if (mes < 1 || mes > 12) { // Comprueba que el mes esté entre 1 y 12
+            return false; // Mes fuera de rango válido
+        }
+        int maxDias = java.time.Month.of(mes).length(java.time.Year.isLeap(anio)); // Calcula los días máximos del mes (considerando años bisiestos)
+        return dia >= 1 && dia <= maxDias; // Devuelve true solo si el día existe dentro de ese mes y año
     }
 
     private String leer(String mensaje) {
