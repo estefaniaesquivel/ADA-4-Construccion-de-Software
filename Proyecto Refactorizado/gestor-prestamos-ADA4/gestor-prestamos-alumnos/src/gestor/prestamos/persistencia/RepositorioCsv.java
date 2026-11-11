@@ -3,7 +3,6 @@ package gestor.prestamos.persistencia;
 import gestor.prestamos.modelo.Herramienta;
 import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -127,13 +126,25 @@ public final class RepositorioCsv {
 
     private Herramienta parsearHerramienta(String linea, int numeroLinea) throws IOException {
         List<String> campos = CsvUtil.dividir(linea);
-        if (campos.size() < CAMPOS_HERRAMIENTA || campos.size() > CAMPOS_HERRAMIENTA + 1) {
+        
+        // Se introducen variables explicativas para descomponer la condición de validación de longitud
+        final boolean faltanCamposObligatorios = campos.size() < CAMPOS_HERRAMIENTA; // Verifica si hay menos de 2 campos
+        final boolean excedeCamposPermitidos = campos.size() > CAMPOS_HERRAMIENTA + 1; // Verifica si supera los 3 campos (incluyendo el opcional)
+        
+        if (faltanCamposObligatorios || excedeCamposPermitidos) { // Condición simplificada usando las variables explicativas
             throw error(ARCHIVO_HERRAMIENTAS, numeroLinea, "se esperaban " + CAMPOS_HERRAMIENTA + " campos");
         }
         try {
             int id = Integer.parseInt(campos.get(0).trim());
-            return new Herramienta(id, campos.get(1),
-                    campos.size() > CAMPOS_HERRAMIENTA && Boolean.parseBoolean(campos.get(2).trim()));
+            
+            // Se extrae el acceso al índice en una variable que explica qué dato contiene la columna 1
+            final String nombre = campos.get(1); // Nombre de la herramienta
+            
+            // Se descompone la expresión booleana compleja en variables que explican cada regla
+            final boolean incluyeCampoBaja = campos.size() > CAMPOS_HERRAMIENTA; // Indica si la línea CSV trae la tercera columna opcional
+            final boolean estaDadaDeBaja = incluyeCampoBaja && Boolean.parseBoolean(campos.get(2).trim()); // Evalúa si la herramienta está dada de baja
+            
+            return new Herramienta(id, nombre, estaDadaDeBaja); // Llamada al constructor más limpia y autoexplicativa
         } catch (IllegalArgumentException e) {
             throw error(ARCHIVO_HERRAMIENTAS, numeroLinea, e.getMessage());
         }
