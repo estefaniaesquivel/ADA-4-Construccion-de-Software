@@ -1,16 +1,16 @@
 package gestor.prestamos.consola;
 
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
 import gestor.prestamos.modelo.EstadoPrestamo;
 import gestor.prestamos.modelo.Herramienta;
 import gestor.prestamos.modelo.PeriodoPrestamo;
 import gestor.prestamos.modelo.Prestamo;
 import gestor.prestamos.persistencia.RepositorioCsv;
 import gestor.prestamos.servicio.GestorPrestamos;
-
-import java.io.IOException;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Menú principal de la aplicación. Muestra las opciones, pide los datos necesarios
@@ -169,14 +169,42 @@ public final class MenuConsola {
             System.out.println("\n  No hay herramientas disponibles para prestar.");
             return;
         }
+
+        //TECNICA: EXTRACT METHOD 
+        // (SE APLICO A LOS SIGUIENTES 3 BLOQUES DE CODIGO: PETICION DE FECHAS, SELECCION DE HERRAMIENTA Y REGISTRO DEL PRESTAMO)
+        //  CADA BLOQUE SE EXTRAE A UN METODO PRIVADO NUEVO.
+        //NOTA: Solo cambia la clase MenuConsola ya que los métodos nuevos son privados, así que no afecta a Main
+
+        //DESPUES DE EXTRAER LOS METODOS AHORA SI, SE LLAMAN DENTRO DE LA FUNCIÓN PRESTAR()
+        //ERESPETANDO EL PRINCIPIO DE RESPONSABILIDAD UNICA
+        
+        //Se extrajó la seleccion de la herramienta a un metodo privado llamado seleccionarHerramienta()
+        int id = seleccionarHerramienta(disponibles);
+        String prestatario = entrada.pedirTexto("Nombre de quien la recibe: ");
+        //La peticion de las fechas se extrajo a pedirPeriodo(), que devuelve el PeriodoPrestamo ya armado
+        PeriodoPrestamo periodo = pedirPeriodo();
+        //El registro del prestamo (prestar, guardar y confirmar) se extrajo a registrarPrestamo()
+        registrarPrestamo(id, prestatario, periodo);
+    }
+
+    // TECNICA EXTRACT METHOD (SELECCION DE HERRAMIENTA)
+    /**
+     * Muestra las herramientas disponibles y pide al usuario que elija una.
+     *
+     * @param disponibles herramientas que pueden prestarse; no puede estar vacía
+     * @return el identificador de la herramienta elegida
+     */
+    private int seleccionarHerramienta(List<Herramienta> disponibles) {
         System.out.println("\n  Herramientas disponibles:");
         for (Herramienta herramienta : disponibles) {
             System.out.printf("    %d. %s%n", herramienta.getId(), herramienta.getNombre());
         }
         List<Integer> ids = disponibles.stream().map(Herramienta::getId).toList();
-        int id = entrada.pedirOpcion("ID de la herramienta: ", ids);
-        String prestatario = entrada.pedirTexto("Nombre de quien la recibe: ");
+        return entrada.pedirOpcion("ID de la herramienta: ", ids);
+    }
 
+    // TECNICA EXTRACT METHOD (PETICION DE FECHAS)
+    private PeriodoPrestamo pedirPeriodo() {
         LocalDate hoy = LocalDate.now();
         LocalDate inicio = entrada.pedirFecha("Fecha de préstamo (AAAA-MM-DD, Enter = " + hoy + "): ", hoy);
         LocalDate limitePorDefecto = inicio.plusDays(GestorPrestamos.DIAS_PRESTAMO_DEFECTO);
@@ -185,12 +213,17 @@ public final class MenuConsola {
 
         // Tecnica: Introduce Parameter Object.
         // Se empaquetan las fechas de inicio y limite en PeriodoPrestamo antes de solicitar el prestamo.
-        PeriodoPrestamo periodo = new PeriodoPrestamo(inicio, limite);
-        Prestamo nuevo = gestor.prestar(id, prestatario, periodo);
+        return new PeriodoPrestamo(inicio, limite);
+    }
+
+    // TECNICA EXTRACT METHOD (REGISTRO DEL PRESTAMO)
+    private void registrarPrestamo(int herramientaId, String prestatario, PeriodoPrestamo periodo) {
+        Prestamo nuevo = gestor.prestar(herramientaId, prestatario, periodo);
         guardar();
         System.out.printf("  '%s' prestada a %s hasta %s.%n",
                 nuevo.getHerramienta().getNombre(), nuevo.getPrestatario(), nuevo.getFechaLimite());
     }
+
 
     private void devolver() {
         List<Prestamo> activos = gestor.prestamosActivos();
@@ -229,20 +262,51 @@ public final class MenuConsola {
             System.out.println("\n  No hay préstamos activos.");
             return;
         }
-        LocalDate hoy = LocalDate.now();
+        //TECNICA REPLACE TEMP WITH QUERY
+        //La variable temporal "hoy" (LocalDate hoy = LocalDate.now()) se asignaba una sola vez, asi que se
+        //sustituyo por la consulta fechaActual(). Cada lugar donde se usaba "hoy" ahora llama a esa consulta
+        //fechaActual() se puso debajo de esta funcion para que sea mas facil de encontrar
+        //la refac replace temp with query no involucró cambios en otras clases, ya que la variable 
+        //temporal "hoy" solo se usaba en esta funcion y no se pasaba a otras clases
         System.out.println("\n  Préstamos activos:");
         for (Prestamo p : activos) {
+            //TECNICA: DECOMPOSE CONDITIONAL
+            //El if/else mezclaba el calculo del retraso con la construccion del texto. Se extrajeron las condiciones a
+            //métodos privados nuevos: la condicion (estaAtrasado), y si cumple ejecuta (describirAtraso) y si no 
+            // ejecuta (describirAlDia), de modo que solo se lee que se decide y que se muestra en cada caso.
+            //NOTA: se colocaron debajo de fechaActual() para que sea más facil buscarlos
+            //Esto fue posible gracias a fechaActual() (que se hizo con Replace Temp with Query), ya que
+            //los metodos nuevos obtienen la fecha por si mismos y no hace falta pasarles "hoy" como parametro
             String situacion;
-            if (p.estado(hoy) == EstadoPrestamo.ATRASADO) {
-                long dias = p.getDiasRetrasoA(hoy);
-                double estimada = p.calcularPenalizacion(hoy, Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
-                situacion = String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
+            if (estaAtrasado(p)) {
+                situacion = describirAtraso(p);
             } else {
-                situacion = "Al día, vence " + p.getFechaLimite();
+                situacion = describirAlDia(p);
             }
             System.out.printf("    %s - %s | desde %s | %s%n",
                     p.getHerramienta().getNombre(), p.getPrestatario(), p.getFechaPrestamo(), situacion);
         }
+    }
+    //TECNICA REPLACE TEMP WITH QUERY (MÉTODO DE CONSULTA PARA FECHA ACTUAL)
+    private LocalDate fechaActual() {
+        return LocalDate.now();
+    }
+
+    //TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION SI ESTÁ ATRASADO)
+    private boolean estaAtrasado(Prestamo prestamo) {
+        return prestamo.estado(fechaActual()) == EstadoPrestamo.ATRASADO;
+    }
+
+    //TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION QUE DESCRIBE EL ATRASO)
+    private String describirAtraso(Prestamo prestamo) {
+        long dias = prestamo.getDiasRetrasoA(fechaActual());
+        double estimada = prestamo.calcularPenalizacion(fechaActual(), Prestamo.PENALIZACION_POR_DIA); //Se cambió GestorPrestamo por Prestamo.PENALIZACION_POR_DIA
+        return String.format("ATRASADO %d día(s), penalización estimada %.2f €", dias, estimada);
+    }
+
+    // TECNICA DECOMPOSE CONDITIONAL (METODO PARA CONDICION QUE DESCRIBE QUE EL PRESTAMO ESTÁ AL DÍA)
+    private String describirAlDia(Prestamo prestamo) {
+        return "Al día, vence " + prestamo.getFechaLimite();
     }
 
     private void verHistorial() {
