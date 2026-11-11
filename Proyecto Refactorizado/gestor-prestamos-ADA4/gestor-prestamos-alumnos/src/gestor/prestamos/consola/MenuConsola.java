@@ -3,6 +3,7 @@ package gestor.prestamos.consola;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import gestor.prestamos.modelo.EstadoPrestamo;
@@ -39,6 +40,11 @@ public final class MenuConsola {
     private final RepositorioCsv repositorio;
     private final Entrada entrada;
 
+    // TECNICA: REPLACE CONDITIONAL WITH POLYMORPHISM.
+    // Se utiliza un mapa para relacionar cada número del menú con un objeto
+    // que contiene el comportamiento correspondiente a esa opción.
+    private final Map<Integer, OpMenu> opcionesMenu;
+
     /**
      * Crea el menú con sus dependencias.
      *
@@ -50,11 +56,28 @@ public final class MenuConsola {
         this.gestor = gestor;
         this.repositorio = repositorio;
         this.entrada = entrada;
+
+        // TECNICA: REPLACE CONDITIONAL WITH POLYMORPHISM
+        // cada número se relaciona con una instancia de su clase concreta
+        // Todas las clases heredan de OpcionMenu, pero cada una implementa su propio comportamiento con el método ejecutar()
+        // Map.of permite crear un mapa con sus elementos iniciales, Significa que cuando busquemos la clave 3,
+        // obtendremos un objeto de tipo OpcionPrestar.
+        this.opcionesMenu = Map.of( 
+                0, new OpSalir(this), //hacemos (this) para enviar la instancia actual de MenuConsola al constructor de OpSalir
+                1, new OpListarHerramientas(this),
+                2, new OpAñadirHerramienta(this),
+                3, new OpPrestar(this),
+                4, new OpDevolver(this),
+                5, new OpVerPrestamosActivos(this),
+                6, new OpVerHistorial(this),
+                7, new OpDarBaja(this),
+                8, new OpReactivar(this)
+        );
     }
 
     /**
      * Muestra el menú en bucle hasta que el usuario elige salir. Los errores de
-     * negocio se muestran sin cerrar la aplicación.
+     * negocio se muestran sin cerrar la aplicación
      */
     public void ejecutar() {
         boolean salir = false;
@@ -73,27 +96,23 @@ public final class MenuConsola {
     /**
      * Ejecuta la opción elegida.
      *
+     * TECNICA: REPLACE CONDITIONAL WITH POLYMORPHISM.
+     * Se eliminó la estructura switch que determinaba qué método ejecutar.
+     * Ahora se obtiene el objeto asociado al número seleccionado y se delega la operación en su método ejecutar().
+     *
      * @param opcion número de opción del menú
      * @return {@code true} si el usuario quiere salir de la aplicación
      */
     private boolean ejecutarOpcion(int opcion) {
-        switch (opcion) {
-            case 1 -> listarHerramientas();
-            case 2 -> anadirHerramienta();
-            case 3 -> prestar();
-            case 4 -> devolver();
-            case 5 -> verPrestamosActivos();
-            case 6 -> verHistorial();
-            case 7 -> darDeBaja();
-            case 8 -> reactivar();
-            default -> {
-                return true;
-            }
-        }
-        return false;
+        OpMenu accion = opcionesMenu.get(opcion);
+        return accion.ejecutar();
     }
 
-    private void listarHerramientas() {
+    // Se modifica la visibilidad de private a package-private para permitir
+    // que las clases OpcionMenu concretas puedan invocar estas operaciones.
+    // No se cambia la implementación original de los métodos.
+
+    void listarHerramientas() {
         List<Herramienta> herramientas = gestor.getHerramientas();
         if (herramientas.isEmpty()) {
             System.out.println("\n  No hay herramientas registradas.");
@@ -110,7 +129,7 @@ public final class MenuConsola {
         }
     }
 
-    private void darDeBaja() {
+    void darDeBaja() {
         List<Herramienta> candidatas = gestor.getHerramientas().stream()
                 .filter(h -> !h.isDadaDeBaja())
                 .toList();
@@ -133,7 +152,7 @@ public final class MenuConsola {
         System.out.printf("  '%s' dada de baja. Su historial se conserva.%n", elegida.getNombre());
     }
 
-    private void reactivar() {
+    void reactivar() {
         List<Herramienta> dadas = gestor.getHerramientas().stream()
                 .filter(Herramienta::isDadaDeBaja)
                 .toList();
@@ -156,14 +175,14 @@ public final class MenuConsola {
         System.out.printf("  '%s' reactivada y disponible para préstamo.%n", elegida.getNombre());
     }
 
-    private void anadirHerramienta() {
+    void anadirHerramienta() {
         String nombre = entrada.pedirTexto("Nombre de la herramienta: ");
         Herramienta nueva = gestor.anadirHerramienta(nombre);
         guardar();
         System.out.printf("  Herramienta '%s' añadida con ID %d.%n", nueva.getNombre(), nueva.getId());
     }
 
-    private void prestar() {
+    void prestar() {
         List<Herramienta> disponibles = gestor.herramientasDisponibles();
         if (disponibles.isEmpty()) {
             System.out.println("\n  No hay herramientas disponibles para prestar.");
@@ -177,7 +196,7 @@ public final class MenuConsola {
 
         //DESPUES DE EXTRAER LOS METODOS AHORA SI, SE LLAMAN DENTRO DE LA FUNCIÓN PRESTAR()
         //ERESPETANDO EL PRINCIPIO DE RESPONSABILIDAD UNICA
-        
+
         //Se extrajó la seleccion de la herramienta a un metodo privado llamado seleccionarHerramienta()
         int id = seleccionarHerramienta(disponibles);
         String prestatario = entrada.pedirTexto("Nombre de quien la recibe: ");
@@ -224,8 +243,7 @@ public final class MenuConsola {
                 nuevo.getHerramienta().getNombre(), nuevo.getPrestatario(), nuevo.getFechaLimite());
     }
 
-
-    private void devolver() {
+    void devolver() {
         List<Prestamo> activos = gestor.prestamosActivos();
         if (activos.isEmpty()) {
             System.out.println("\n  No hay préstamos pendientes de devolución.");
@@ -256,7 +274,7 @@ public final class MenuConsola {
         }
     }
 
-    private void verPrestamosActivos() {
+    void verPrestamosActivos() {
         List<Prestamo> activos = gestor.prestamosActivos();
         if (activos.isEmpty()) {
             System.out.println("\n  No hay préstamos activos.");
@@ -287,6 +305,7 @@ public final class MenuConsola {
                     p.getHerramienta().getNombre(), p.getPrestatario(), p.getFechaPrestamo(), situacion);
         }
     }
+
     //TECNICA REPLACE TEMP WITH QUERY (MÉTODO DE CONSULTA PARA FECHA ACTUAL)
     private LocalDate fechaActual() {
         return LocalDate.now();
@@ -309,7 +328,7 @@ public final class MenuConsola {
         return "Al día, vence " + prestamo.getFechaLimite();
     }
 
-    private void verHistorial() {
+    void verHistorial() {
         List<Prestamo> historial = gestor.historial();
         if (historial.isEmpty()) {
             System.out.println("\n  No hay devoluciones registradas.");
